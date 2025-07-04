@@ -6,11 +6,12 @@ const regd_users = express.Router();
 let users = [];
 
 const isValid = (username) => {
-  return users.some(user => user.username === username);
+  return username && typeof username === 'string';
 };
 
 const authenticatedUser = (username, password) => {
-  return users.some(user => user.username === username && user.password === password);
+  const user = users.find(u => u.username === username && u.password === password);
+  return !!user;
 };
 
 regd_users.post("/login", (req, res) => {
@@ -20,32 +21,26 @@ regd_users.post("/login", (req, res) => {
     return res.status(400).json({ message: "Username and password are required" });
   }
 
-  if (!authenticatedUser(username, password)) {
+  if (authenticatedUser(username, password)) {
+    const accessToken = jwt.sign({ username }, 'access', { expiresIn: '1h' });
+    req.session.authorization = { accessToken, username };
+    return res.status(200).json({ message: "User successfully logged in" });
+  } else {
     return res.status(401).json({ message: "Invalid credentials" });
   }
-
-  const accessToken = jwt.sign({ username }, "secretKey", { expiresIn: '1h' });
-
-  req.session.authorization = {
-    accessToken,
-    username,
-  };
-
-  return res.status(200).json({ message: "Login successful" });
 });
 
 regd_users.put("/auth/review/:isbn", (req, res) => {
   const isbn = req.params.isbn;
-  const review = req.body.review;
-
+  const review = req.query.review;
   const username = req.session?.authorization?.username;
 
   if (!username) {
-    return res.status(401).json({ message: "Unauthorized: Please log in" });
+    return res.status(403).json({ message: "User not authenticated" });
   }
 
   if (!review) {
-    return res.status(400).json({ message: "Review is required" });
+    return res.status(400).json({ message: "Review query param is required" });
   }
 
   if (!books[isbn]) {
@@ -53,8 +48,7 @@ regd_users.put("/auth/review/:isbn", (req, res) => {
   }
 
   books[isbn].reviews[username] = review;
-
-  return res.status(200).json({ message: "Review added/updated successfully" });
+  return res.status(200).json({ message: "Review added/modified successfully" });
 });
 
 regd_users.delete("/auth/review/:isbn", (req, res) => {
@@ -62,7 +56,7 @@ regd_users.delete("/auth/review/:isbn", (req, res) => {
   const username = req.session?.authorization?.username;
 
   if (!username) {
-    return res.status(401).json({ message: "Unauthorized" });
+    return res.status(403).json({ message: "User not authenticated" });
   }
 
   if (!books[isbn]) {
@@ -73,7 +67,7 @@ regd_users.delete("/auth/review/:isbn", (req, res) => {
     delete books[isbn].reviews[username];
     return res.status(200).json({ message: "Review deleted successfully" });
   } else {
-    return res.status(404).json({ message: "Review not found" });
+    return res.status(404).json({ message: "Review not found for this user" });
   }
 });
 

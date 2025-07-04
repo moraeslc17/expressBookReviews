@@ -21,7 +21,7 @@ app.use("/customer/auth/*", function auth(req, res, next) {
 
     const token = req.session.authorization.accessToken;
 
-    jwt.verify(token, "secretKey", (err, user) => {
+    jwt.verify(token, "access", (err, user) => {
         if (err) {
             return res.status(403).json({ message: "Invalid token" });
         }
